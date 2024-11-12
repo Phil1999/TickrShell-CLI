@@ -43,7 +43,13 @@ namespace StockTracker {
         switch (hash(command.c_str())) {
         case Commands::Subscribe:
             if (!symbol.empty()) {
-                subscribe(symbol);
+                if (!isValidSymbolFormat(symbol)) {
+                    spdlog::info("Invalid symbol format. Symbols should be 1-5 uppercase letters.\n");
+                    return;
+                }
+                if (confirmAction("subscribe to", symbol)) {
+                    subscribe(symbol);
+                }
             }
             else {
                 spdlog::warn("Usage: subscribe <symbol>");
@@ -92,6 +98,7 @@ namespace StockTracker {
 
         case Commands::Help:
             showHelp();
+            showSafetyTips();
             break;
 
         case Commands::Exit:
@@ -104,6 +111,7 @@ namespace StockTracker {
 
         default:
             spdlog::warn("Unknown command: {}", command);
+            std::cout << "Type 'help' for available commands and safety tips.\n";
             break;
         }
 	}
@@ -237,7 +245,26 @@ namespace StockTracker {
         std::cout << "-------------------------------------\n";
         std::cout << "Author: Philip Lee\n";
         std::cout << "-------------------------------------\n";
+        std::cout << "Note: for now, it is only possible to subscribe to MSFT, AAPL, GOOGL, AMZN and META \n";
     }
+
+    void CliApp::showUsageCosts() {
+        std::cout << "\nUsage Costs and Information:\n"
+            << "==============================\n"
+            << "1. Data updates: Updates for subscribed stocks are provided every 8 seconds.\n"
+            << "2. API Rate Limits: Maximum 100 queries per minute\n"
+            << "3. Storage: Price history stored locally using SQLite approximately 34 bytes per row\n\n";
+    }
+
+    void CliApp::showSafetyTips() {
+        std::cout << "\nSafety Tips:\n";
+        std::cout << "1. Always verify stock symbols before subscribing\n";
+        std::cout << "2. Use 'query' to check prices before subscribing\n";
+        std::cout << "3. Review 'history' to understand price volatility\n";
+        std::cout << "4. Use 'list' regularly to track your subscriptions\n";
+        std::cout << "5. Clear the screen with 'clear' if it gets cluttered\n\n";
+    }
+
 
     void CliApp::clearScreen() {
         // Using ANSI escape codes to clear the screen
@@ -262,6 +289,19 @@ namespace StockTracker {
         std::cout << "Received stock update: " << quote.symbol
             << " - $" << quote.price
             << " (" << data.change_percent << "% change)\n";
+    }
+
+    bool CliApp::confirmAction(const std::string& action, const std::string& symbol) {
+        std::cout << "Are you sure you want to " << action << " " << symbol << "? (y/n): ";
+        std::string response;
+        std::getline(std::cin, response);
+        return (response == "y" || response == "Y");
+    }
+
+    bool CliApp::isValidSymbolFormat(const std::string& symbol) {
+        // Check if symbol is 1-5 uppercase letters
+        if (symbol.empty() || symbol.length() > 5) return false;
+        return std::all_of(symbol.begin(), symbol.end(), [](char c) { return std::isupper(c); });
     }
 
     bool CliApp::isStockSubscribed(const std::string& symbol) {
@@ -310,6 +350,8 @@ namespace StockTracker {
                         }
                     }
                     std::cout << "Number of subscribed stocks in local cache: " << stocks.size() << "\n";
+                    std::cout << "\n> ";
+                    std::cout.flush();
                 }
                 else if (msg->type == MessageType::Subscribe) {
                     // Update the CLI's subscribed stock list
@@ -321,8 +363,6 @@ namespace StockTracker {
                 else if (msg->type == MessageType::Error && msg->error) {
                     std::cout << "Error: " << *msg->error << std::endl;
                 }
-
-                std::cout << "\n> ";
                 std::cout.flush();
             }
 

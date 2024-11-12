@@ -9,6 +9,8 @@ int main() {
 
 		// Print the welcome message
 		app.printWelcomeMessage();
+		app.showUsageCosts();
+		app.showSafetyTips();
 
 
 		// Run app

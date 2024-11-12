@@ -67,9 +67,17 @@ namespace StockTracker {
 
 		void updateStockData(const StockQuote& quote);
 
+		// Safety methods
+		bool confirmAction(const std::string& action, const std::string& symbol);
+		bool isValidSymbolFormat(const std::string& symbol);
+
+
+
 	public:
 		CliApp();
 		void printWelcomeMessage();
+		void showUsageCosts();
+		void showSafetyTips();
 		void run();
 		void stop();
 
