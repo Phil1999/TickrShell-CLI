@@ -405,13 +405,20 @@ namespace StockTracker {
 
                 // Handle subscription list from the backend
                 else if (msg->type == MessageType::SubscriptionsList) {
+                    std::vector<std::string> symbolsToQuery;
+
                     for (const auto& symbol : msg->subscriptions.value()) {
                         if (!isStockSubscribed(symbol)) {
-                            stocks[symbol] = StockData{};  // Add to local stocks map
+                            stocks[symbol] = StockData{};
                             std::cout << "Restored subscription to stock: " << symbol << std::endl;
-
-                            query(symbol);
+                            symbolsToQuery.push_back(symbol);
                         }
+                    }
+
+                    // Query symbols with a delay between each
+                    for (const auto& symbol : symbolsToQuery) {
+                        query(symbol);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     }
                     std::cout << "Number of subscribed stocks in local cache: " << stocks.size() << "\n";
                     std::cout << "\n> ";
