@@ -12,8 +12,8 @@ namespace StockTracker {
         : publisher(zmq::socket_type::pub)
         , subscriber(zmq::socket_type::sub)
     {
-        publisher.bind("tcp://*:5556");
-        subscriber.connect("tcp://localhost:5555");
+        publisher.bind("tcp://*:5557");
+        subscriber.connect("tcp://localhost:5556");
 
         // Use the specific subscribe method
         subscriber.setSubscribe("");
@@ -109,6 +109,16 @@ namespace StockTracker {
             clearScreen();
             break;
 
+        case Commands::SetCurrency:
+            if (!symbol.empty()) {
+                std::transform(symbol.begin(), symbol.end(), symbol.begin(), ::toupper);
+                setCurrency(symbol);
+            }
+            else {
+                spdlog::warn("Usage: currency <CODE> (e.g. currency EUR)");
+            }
+            break;
+
         default:
             spdlog::warn("Unknown command: {}", command);
             std::cout << "Type 'help' for available commands and safety tips.\n";
@@ -124,10 +134,26 @@ namespace StockTracker {
 
         std::cout << "Subscribed Stocks:" << std::endl;
         for (const auto& [symbol, data] : stocks) {
-            std::cout << symbol << ": $" << data.current_price << " ("
-                << data.change_percent << "% change)" << std::endl;
+            std::cout << symbol << ": ";
+            // Get the appropriate currency symbol
+            if (data.currency == "USD") {
+                std::cout << "$";
+            }
+            else if (data.currency == "EUR") {
+                std::cout << "€";
+            }
+            else if (data.currency == "GBP") {
+                std::cout << "£";
+            }
+            else if (data.currency == "JPY") {
+                std::cout << "¥";
+            }
+            else {
+                std::cout << data.currency << " "; // For other currencies
+            }
+            std::cout << std::fixed << std::setprecision(2) << data.current_price
+                << " (" << data.change_percent << "% change)" << std::endl;
         }
-
     }
 
     void CliApp::renderFullGraph(const std::string& symbol) {
@@ -230,6 +256,7 @@ namespace StockTracker {
             << "  graph <symbol>       - Show graph view of stock (price history needed) \n"
             << "  history <symbol>     - Show price history of stock (last 5)\n"
             << "  list                 - Show all subscribed stocks\n"
+            << "  currency <code>      - Set display currency (e.g. EUR, GBP)\n"
             << "  help                 - Show this help\n"
             << "  clear                - Clears the terminal\n"
             << "  exit                 - Exit application\n";
@@ -274,10 +301,12 @@ namespace StockTracker {
         printWelcomeMessage();
     }
 
+
     void CliApp::updateStockData(const StockQuote& quote) {
         auto& data = stocks[quote.symbol];
         data.current_price = quote.price;
         data.change_percent = quote.change_percent.value_or(0.0);
+        data.currency = quote.currency;  // Make sure to update the currency
 
         // Keep a price history for the graph
         data.price_history.push_back(quote.price);
@@ -286,9 +315,10 @@ namespace StockTracker {
         }
 
         // Log the stock update received
+        std::string currencySymbol = (data.currency == "USD") ? "$" : data.currency;
         std::cout << "Received stock update: " << quote.symbol
-            << " - $" << quote.price
-            << " (" << data.change_percent << "% change)\n";
+            << " - " << currencySymbol << std::fixed << std::setprecision(2)
+            << data.current_price << " (" << data.change_percent << "% change)\n";
     }
 
     bool CliApp::confirmAction(const std::string& action, const std::string& symbol) {
@@ -306,6 +336,40 @@ namespace StockTracker {
 
     bool CliApp::isStockSubscribed(const std::string& symbol) {
         return stocks.find(symbol) != stocks.end();
+    }
+
+    void CliApp::setCurrency(const std::string& currency) {
+        if (stocks.empty()) {
+            spdlog::warn("Please subscribe to atleast one stock first.");
+            return;
+        }
+
+        if (!CurrencyService::isValidCurrencyCode(currency)) {
+            spdlog::warn("Invalid currency code. Must be 3 uppercase letters (e.g. USD, EUR, GBP)");
+            return;
+        }
+
+        display_currency = currency;
+        Message msg = Message::makeSetCurrency(currency);
+        publisher.send(msg);
+        spdlog::info("Requesting currency change to {}", currency);
+    }
+
+    void CliApp::displayPriceInCurrency(double price) const {
+        if (display_currency == "USD") {
+            std::cout << "$" << std::fixed << std::setprecision(2) << price;
+            return;
+        }
+
+        try {
+            double converted = currency_service.convertCurrency(price, display_currency);
+            std::cout << display_currency << " " << std::fixed << std::setprecision(2) << converted;
+        }
+        catch (const std::exception& e) {
+            // Fallback to USD if conversion fails
+            std::cout << "$" << std::fixed << std::setprecision(2) << price;
+            spdlog::warn("Currency conversion failed: {}", e.what());
+        }
     }
 
     void CliApp::processUpdates() {

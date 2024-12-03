@@ -1,5 +1,6 @@
 #pragma once
 #include <StockTracker/Messages.h>
+#include <StockTracker/CurrencyService.h>
 #include <unordered_map>
 #include <deque>
 #include <thread>
@@ -24,6 +25,7 @@ namespace Commands {
 	constexpr auto Help = hash("help");
 	constexpr auto Exit = hash("exit");
 	constexpr auto Clear = hash("clear");
+	constexpr auto SetCurrency = hash("currency");
 }
 
 
@@ -34,11 +36,15 @@ namespace StockTracker {
 		MessageSocket publisher;
 		MessageSocket subscriber;
 
+		mutable CurrencyService currency_service;
+		std::string display_currency{ "USD" }; // Default currency.
+
 
 		// Stock data
 		struct StockData {
 			double current_price{ 0.0 };
 			double change_percent{ 0.0 };
+			std::string currency{ "USD" };
 			std::deque<double> price_history;
 			static constexpr size_t MAX_HISTORY = 15;
 		};
@@ -70,6 +76,9 @@ namespace StockTracker {
 		// Safety methods
 		bool confirmAction(const std::string& action, const std::string& symbol);
 		bool isValidSymbolFormat(const std::string& symbol);
+
+		void setCurrency(const std::string& currency);
+		void displayPriceInCurrency(double price) const;
 
 
 
